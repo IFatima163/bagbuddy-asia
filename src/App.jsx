@@ -1,18 +1,14 @@
-// Service1.jsx but stuck as App.jsx
-
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { useCart } from "./context/CartContext";
-import CartButton from "./components/CartButton";
 
 // Helpers
-const haversineKm = (lat1,lon1,lat2,lon2) => {
+const haversineKm = (lat1, lon1, lat2, lon2) => {
   const R = 6371;
-  const toRad = v => v * Math.PI/180;
-  const dLat = toRad(lat2-lat1);
-  const dLon = toRad(lon2-lon1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-  const c = 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const toRad = v => v * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 };
 
@@ -31,20 +27,18 @@ const CAR_CAPACITY = {
 const inferCar = (counts) => {
   const eq = luggageToLargeEquivalent(counts);
   if (eq <= CAR_CAPACITY.small.large) return 'small';
-  const medium_cap_large = CAR_CAPACITY.medium.large + (CAR_CAPACITY.medium.medium * (2/3));
+  const medium_cap_large = CAR_CAPACITY.medium.large + (CAR_CAPACITY.medium.medium * (2 / 3));
   if (eq <= medium_cap_large) return 'medium';
   return 'large';
 };
 
 const PRICES = {
-  self: { small:15, regular:20, large:25, xl:30 },
+  self: { small: 15, regular: 20, large: 25, xl: 30 },
   doorUpsell: 15,
   airportUpsell: 60
 };
 
-function App(){
-  const { addToCart } = useCart();   // <<< CART LOGIC ADDED HERE
-
+function App() {
   const [city, setCity] = useState('Kuala Lumpur');
   const [pickupQuery, setPickupQuery] = useState('');
   const [dropQuery, setDropQuery] = useState('');
@@ -52,7 +46,7 @@ function App(){
   const [dropLatLng, setDropLatLng] = useState(null);
   const [pickupDt, setPickupDt] = useState('');
   const [dropDt, setDropDt] = useState('');
-  const [luggage, setLuggage] = useState({ small:0, regular:0, large:0, xl:0 });
+  const [luggage, setLuggage] = useState({ small: 0, regular: 0, large: 0, xl: 0 });
   const [upsell, setUpsell] = useState('none');
   const [airportChoice, setAirportChoice] = useState(null);
   const [availableAirports, setAvailableAirports] = useState([]);
@@ -62,36 +56,36 @@ function App(){
   const [pickupSuggestions, setPickupSuggestions] = useState([]);
   const [dropSuggestions, setDropSuggestions] = useState([]);
 
-  useEffect(()=> {
-    if(window.BagBuddyConfig && window.BagBuddyConfig.cities_airports){
+  useEffect(() => {
+    if (window.BagBuddyConfig && window.BagBuddyConfig.cities_airports) {
       setAvailableAirports(window.BagBuddyConfig.cities_airports[city] || []);
-      if((window.BagBuddyConfig.cities_airports[city] || []).length === 1){
+      if ((window.BagBuddyConfig.cities_airports[city] || []).length === 1) {
         setAirportChoice((window.BagBuddyConfig.cities_airports[city] || [])[0]);
       }
     }
   }, [city]);
 
-  useEffect(()=> {
+  useEffect(() => {
     let total = 0;
-    total += (luggage.small||0) * PRICES.self.small;
-    total += (luggage.regular||0) * PRICES.self.regular;
-    total += (luggage.large||0) * PRICES.self.large;
-    total += (luggage.xl||0) * PRICES.self.xl;
-    if(upsell === 'airport') total += PRICES.airportUpsell;
-    if(upsell === 'door') total += PRICES.doorUpsell;
+    total += (luggage.small || 0) * PRICES.self.small;
+    total += (luggage.regular || 0) * PRICES.self.regular;
+    total += (luggage.large || 0) * PRICES.self.large;
+    total += (luggage.xl || 0) * PRICES.self.xl;
+    if (upsell === 'airport') total += PRICES.airportUpsell;
+    if (upsell === 'door') total += PRICES.doorUpsell;
     setPrice(total);
     const inferred = inferCar(luggage);
     setCarSize(inferred);
   }, [luggage, upsell]);
 
   const nominatimSearch = async (q, setResults) => {
-    if(!q || q.length < 2) { setResults([]); return; }
+    if (!q || q.length < 2) { setResults([]); return; }
     const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}&limit=6&addressdetails=1`;
-    try{
-      const r = await fetch(url, { headers: { 'Accept': 'application/json' }});
+    try {
+      const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
       const json = await r.json();
       setResults(json);
-    } catch(e){ setResults([]); }
+    } catch (e) { setResults([]); }
   };
 
   const onSelectPickup = (item) => {
@@ -108,10 +102,10 @@ function App(){
   };
 
   const saveFrequentSearch = async (item) => {
-    try{
+    try {
       await fetch(`${window.BagBuddyConfig.root}/save_search`, {
         method: 'POST',
-        headers: { 'Content-Type':'application/json', 'X-WP-Nonce': window.BagBuddyConfig.nonce },
+        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': window.BagBuddyConfig.nonce },
         body: JSON.stringify({
           city,
           place_name: item.display_name,
@@ -119,27 +113,27 @@ function App(){
           lng: item.lon
         })
       });
-    }catch(e){}
+    } catch (e) { }
   };
 
-  const inc = (size) => setLuggage(l => ({...l, [size]: (l[size]||0)+1}));
-  const dec = (size) => setLuggage(l => ({...l, [size]: Math.max(0,(l[size]||0)-1)}));
+  const inc = (size) => setLuggage(l => ({ ...l, [size]: (l[size] || 0) + 1 }));
+  const dec = (size) => setLuggage(l => ({ ...l, [size]: Math.max(0, (l[size] || 0) - 1) }));
 
   const clientValidate = () => {
     const errs = [];
-    if(!pickupLatLng) errs.push('pickup_location_required');
-    if(!dropLatLng) errs.push('drop_location_required');
-    if(!pickupDt) errs.push('pickup_datetime_required');
-    if(!dropDt) errs.push('dropoff_datetime_required');
+    if (!pickupLatLng) errs.push('pickup_location_required');
+    if (!dropLatLng) errs.push('drop_location_required');
+    if (!pickupDt) errs.push('pickup_datetime_required');
+    if (!dropDt) errs.push('dropoff_datetime_required');
     const now = new Date();
     const p = new Date(pickupDt);
     const d = new Date(dropDt);
-    if(p.toString() === 'Invalid Date' || d.toString() === 'Invalid Date') errs.push('invalid_datetime');
-    if(p < now) errs.push('pickup_in_past');
-    if(d <= p) errs.push('drop_must_be_after_pickup');
-    if(pickupLatLng && dropLatLng){
-      const dist = haversineKm(pickupLatLng.lat,pickupLatLng.lng,dropLatLng.lat,dropLatLng.lng);
-      if(dist > 10) errs.push('distance_exceeded');
+    if (p.toString() === 'Invalid Date' || d.toString() === 'Invalid Date') errs.push('invalid_datetime');
+    if (p < now) errs.push('pickup_in_past');
+    if (d <= p) errs.push('drop_must_be_after_pickup');
+    if (pickupLatLng && dropLatLng) {
+      const dist = haversineKm(pickupLatLng.lat, pickupLatLng.lng, dropLatLng.lat, dropLatLng.lng);
+      if (dist > 10) errs.push('distance_exceeded');
     }
     setErrors(errs);
     return errs.length === 0;
@@ -158,149 +152,158 @@ function App(){
     };
     const res = await fetch(`${window.BagBuddyConfig.root}/validate_booking`, {
       method: 'POST',
-      headers: { 'Content-Type':'application/json', 'X-WP-Nonce': window.BagBuddyConfig.nonce },
+      headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': window.BagBuddyConfig.nonce },
       body: JSON.stringify(payload)
     });
     return res.json();
   };
 
   // ------------------------------
-  // REPLACED OLD BUTTON LOGIC
-  // FULL ADD TO CART LOGIC HERE
+  // WooCommerce Add to Cart Logic
   // ------------------------------
   const onAddToCart = async () => {
-    if(!clientValidate()) return;
+  if (!clientValidate()) return;
 
-    const srv = await serverValidate();
-    if(!srv.valid){
-      setErrors([srv.reason || 'server_invalid']);
-      return;
-    }
+  const srv = await serverValidate();
+  if (!srv.valid) {
+    setErrors([srv.reason || 'server_invalid']);
+    return;
+  }
 
-    // Final cart object
-    addToCart({
-      type: "Self Pick-up & Drop-off",
-      city,
-      pickup: pickupQuery,
-      dropoff: dropQuery,
-      pickup_datetime: pickupDt,
-      dropoff_datetime: dropDt,
-      luggage,
-      upsell,
-      airport: airportChoice,
-      carSize,
-      calculatedPrice: srv.price_total
+  const formData = new FormData();
+  formData.append('product_id', BagBuddyConfig.products.service1);
+  formData.append('quantity', 1);
+  formData.append('price_override', srv.price_total);
+  formData.append('attributes', JSON.stringify({
+    city,
+    pickup: pickupQuery,
+    dropoff: dropQuery,
+    luggage,
+    upsell,
+    airport: airportChoice,
+    carSize
+  }));
+  formData.append('security', wc_add_to_cart_params.wc_ajax_nonce);
+
+  try {
+    const res = await fetch(wc_add_to_cart_params.wc_ajax_url.replace('%%endpoint%%', 'add_to_cart'), {
+      method: 'POST',
+      body: formData
     });
+    const json = await res.json();
+    if (json.error) {
+      alert(json.error);
+    } else {
+      alert('Added to cart: RM ' + srv.price_total.toFixed(2));
+    }
+  } catch (e) {
+    alert('Error adding to cart');
+  }
+};
 
-    alert("Added to cart");
-  };
 
   return (
-    <>
-      <div className="bagbuddy-ui p-4 max-w-3xl">
-        <h2>Self pick-up & drop-off</h2>
+    <div className="bagbuddy-ui p-4 max-w-3xl">
+      <h2>Self pick-up & drop-off</h2>
 
-        <div className="mb-3">
-          <label>City</label>
-          <select value={city} onChange={e=>setCity(e.target.value)}>
-            {Object.keys(window.BagBuddyConfig.cities_airports).map(c => <option key={c}>{c}</option>)}
-          </select>
-        </div>
+      <div className="mb-3">
+        <label>City</label>
+        <select value={city} onChange={e => setCity(e.target.value)}>
+          {Object.keys(window.BagBuddyConfig.cities_airports).map(c => <option key={c}>{c}</option>)}
+        </select>
+      </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label>Pickup location</label>
-            <input value={pickupQuery} onChange={e=>{ setPickupQuery(e.target.value); nominatimSearch(e.target.value, setPickupSuggestions); }} placeholder="Start typing address or shop" />
-            <div className="suggestions">
-              {pickupSuggestions.map(s => <div key={s.place_id} onClick={()=>onSelectPickup(s)} style={{cursor:'pointer'}}>{s.display_name}</div>)}
-            </div>
-          </div>
-          <div>
-            <label>Drop-off location</label>
-            <input value={dropQuery} onChange={e=>{ setDropQuery(e.target.value); nominatimSearch(e.target.value, setDropSuggestions); }} placeholder="Start typing address or shop" />
-            <div className="suggestions">
-              {dropSuggestions.map(s => <div key={s.place_id} onClick={()=>onSelectDrop(s)} style={{cursor:'pointer'}}>{s.display_name}</div>)}
-            </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label>Pickup location</label>
+          <input value={pickupQuery} onChange={e => { setPickupQuery(e.target.value); nominatimSearch(e.target.value, setPickupSuggestions); }} placeholder="Start typing address or shop" />
+          <div className="suggestions">
+            {pickupSuggestions.map(s => <div key={s.place_id} onClick={() => onSelectPickup(s)} style={{ cursor: 'pointer' }}>{s.display_name}</div>)}
           </div>
         </div>
-
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          <div>
-            <label>Pickup date & time</label>
-            <input type="datetime-local" value={pickupDt} onChange={e=>setPickupDt(e.target.value)} />
+        <div>
+          <label>Drop-off location</label>
+          <input value={dropQuery} onChange={e => { setDropQuery(e.target.value); nominatimSearch(e.target.value, setDropSuggestions); }} placeholder="Start typing address or shop" />
+          <div className="suggestions">
+            {dropSuggestions.map(s => <div key={s.place_id} onClick={() => onSelectDrop(s)} style={{ cursor: 'pointer' }}>{s.display_name}</div>)}
           </div>
-          <div>
-            <label>Drop-off date & time</label>
-            <input type="datetime-local" value={dropDt} onChange={e=>setDropDt(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <label>Luggage</label>
-          <div className="grid grid-cols-4 gap-2">
-            {['small','regular','large','xl'].map(size => (
-              <div key={size} className="p-2 border">
-                <div className="text-sm">{size}</div>
-                <div className="mt-2">
-                  <button onClick={()=>dec(size)}>-</button>
-                  <span className="mx-2">{luggage[size]||0}</span>
-                  <button onClick={()=>inc(size)}>+</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <label>Upsell (only one)</label>
-          <div>
-            <label><input type="radio" checked={upsell==='none'} onChange={()=>setUpsell('none')}/> None</label>
-            <label className="ml-3"><input type="radio" checked={upsell==='airport'} onChange={()=>setUpsell('airport')}/> Airport pickup/drop (+RM60)</label>
-            <label className="ml-3"><input type="radio" checked={upsell==='door'} onChange={()=>setUpsell('door')}/> Door-to-door within 10km (+RM15)</label>
-          </div>
-        </div>
-
-        {upsell === 'airport' && (
-          <div className="mt-3">
-            <label>Airport</label>
-            <select value={airportChoice || ''} onChange={e=>setAirportChoice(e.target.value)}>
-              <option value=''>Select airport</option>
-              {availableAirports.map(a=> <option key={a} value={a}>{a}</option>)}
-            </select>
-            <div className="mt-2">Car automatically locked by luggage (inferred: {carSize})</div>
-          </div>
-        )}
-
-        {upsell === 'door' && (
-          <div className="mt-3">
-            <label>Door service location (within 10km of pickup)</label>
-            <input placeholder="Hotel or address" />
-            <div className="mt-2">With passenger? <input type="checkbox" /></div>
-          </div>
-        )}
-
-        <div className="mt-4">
-          <strong>Total: RM {price.toFixed(2)}</strong>
-        </div>
-
-        <div className="mt-4">
-          <button onClick={onAddToCart}>Add to cart</button>
-          <button className="ml-3">Checkout</button>
-        </div>
-
-        <div className="mt-4 text-red-600">
-          {errors.map(e => <div key={e}>{e}</div>)}
         </div>
       </div>
 
-      <CartButton />
-    </>
+      <div className="grid grid-cols-2 gap-3 mt-3">
+        <div>
+          <label>Pickup date & time</label>
+          <input type="datetime-local" value={pickupDt} onChange={e => setPickupDt(e.target.value)} />
+        </div>
+        <div>
+          <label>Drop-off date & time</label>
+          <input type="datetime-local" value={dropDt} onChange={e => setDropDt(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <label>Luggage</label>
+        <div className="grid grid-cols-4 gap-2">
+          {['small', 'regular', 'large', 'xl'].map(size => (
+            <div key={size} className="p-2 border">
+              <div className="text-sm">{size}</div>
+              <div className="mt-2">
+                <button onClick={() => dec(size)}>-</button>
+                <span className="mx-2">{luggage[size] || 0}</span>
+                <button onClick={() => inc(size)}>+</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <label>Upsell (only one)</label>
+        <div>
+          <label><input type="radio" checked={upsell === 'none'} onChange={() => setUpsell('none')} /> None</label>
+          <label className="ml-3"><input type="radio" checked={upsell === 'airport'} onChange={() => setUpsell('airport')} /> Airport pickup/drop (+RM60)</label>
+          <label className="ml-3"><input type="radio" checked={upsell === 'door'} onChange={() => setUpsell('door')} /> Door-to-door within 10km (+RM15)</label>
+        </div>
+      </div>
+
+      {upsell === 'airport' && (
+        <div className="mt-3">
+          <label>Airport</label>
+          <select value={airportChoice || ''} onChange={e => setAirportChoice(e.target.value)}>
+            <option value=''>Select airport</option>
+            {availableAirports.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <div className="mt-2">Car automatically locked by luggage (inferred: {carSize})</div>
+        </div>
+      )}
+
+      {upsell === 'door' && (
+        <div className="mt-3">
+          <label>Door service location (within 10km of pickup)</label>
+          <input placeholder="Hotel or address" />
+          <div className="mt-2">With passenger? <input type="checkbox" /></div>
+        </div>
+      )}
+
+      <div className="mt-4">
+        <strong>Total: RM {price.toFixed(2)}</strong>
+      </div>
+
+      <div className="mt-4">
+        <button className="bagbuddy-add-to-cart" onClick={onAddToCart}>Add to cart</button>
+        <button className="ml-3">Checkout</button>
+      </div>
+
+      <div className="mt-4 text-red-600">
+        {errors.map(e => <div key={e}>{e}</div>)}
+      </div>
+    </div>
   );
 }
 
-document.addEventListener('DOMContentLoaded', function(){
+document.addEventListener('DOMContentLoaded', function () {
   const root = document.getElementById('bagbuddy-service1');
-  if(root){
+  if (root) {
     createRoot(root).render(<App />);
   }
 });
