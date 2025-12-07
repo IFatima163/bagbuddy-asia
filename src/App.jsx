@@ -1,7 +1,9 @@
-// Service1.jsx but forgot to rename so stuck as App.jsx
+// Service1.jsx but stuck as App.jsx
 
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
+import { useCart } from "./context/CartContext";
+import CartButton from "./components/CartButton";
 
 // Helpers
 const haversineKm = (lat1,lon1,lat2,lon2) => {
@@ -40,7 +42,9 @@ const PRICES = {
   airportUpsell: 60
 };
 
-function Service1(){
+function App(){
+  const { addToCart } = useCart();   // <<< CART LOGIC ADDED HERE
+
   const [city, setCity] = useState('Kuala Lumpur');
   const [pickupQuery, setPickupQuery] = useState('');
   const [dropQuery, setDropQuery] = useState('');
@@ -160,120 +164,145 @@ function Service1(){
     return res.json();
   };
 
+  // ------------------------------
+  // REPLACED OLD BUTTON LOGIC
+  // FULL ADD TO CART LOGIC HERE
+  // ------------------------------
   const onAddToCart = async () => {
     if(!clientValidate()) return;
+
     const srv = await serverValidate();
     if(!srv.valid){
       setErrors([srv.reason || 'server_invalid']);
       return;
     }
-    alert('Validated. Price total: RM ' + srv.price_total);
+
+    // Final cart object
+    addToCart({
+      type: "Self Pick-up & Drop-off",
+      city,
+      pickup: pickupQuery,
+      dropoff: dropQuery,
+      pickup_datetime: pickupDt,
+      dropoff_datetime: dropDt,
+      luggage,
+      upsell,
+      airport: airportChoice,
+      carSize,
+      calculatedPrice: srv.price_total
+    });
+
+    alert("Added to cart");
   };
 
   return (
-    <div className="bagbuddy-ui p-4 max-w-3xl">
-      <h2>Self pick-up & drop-off</h2>
+    <>
+      <div className="bagbuddy-ui p-4 max-w-3xl">
+        <h2>Self pick-up & drop-off</h2>
 
-      <div className="mb-3">
-        <label>City</label>
-        <select value={city} onChange={e=>setCity(e.target.value)}>
-          {Object.keys(window.BagBuddyConfig.cities_airports).map(c => <option key={c}>{c}</option>)}
-        </select>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label>Pickup location</label>
-          <input value={pickupQuery} onChange={e=>{ setPickupQuery(e.target.value); nominatimSearch(e.target.value, setPickupSuggestions); }} placeholder="Start typing address or shop" />
-          <div className="suggestions">
-            {pickupSuggestions.map(s => <div key={s.place_id} onClick={()=>onSelectPickup(s)} style={{cursor:'pointer'}}>{s.display_name}</div>)}
-          </div>
-        </div>
-        <div>
-          <label>Drop-off location</label>
-          <input value={dropQuery} onChange={e=>{ setDropQuery(e.target.value); nominatimSearch(e.target.value, setDropSuggestions); }} placeholder="Start typing address or shop" />
-          <div className="suggestions">
-            {dropSuggestions.map(s => <div key={s.place_id} onClick={()=>onSelectDrop(s)} style={{cursor:'pointer'}}>{s.display_name}</div>)}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 mt-3">
-        <div>
-          <label>Pickup date & time</label>
-          <input type="datetime-local" value={pickupDt} onChange={e=>setPickupDt(e.target.value)} />
-        </div>
-        <div>
-          <label>Drop-off date & time</label>
-          <input type="datetime-local" value={dropDt} onChange={e=>setDropDt(e.target.value)} />
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <label>Luggage</label>
-        <div className="grid grid-cols-4 gap-2">
-          {['small','regular','large','xl'].map(size => (
-            <div key={size} className="p-2 border">
-              <div className="text-sm">{size}</div>
-              <div className="mt-2">
-                <button onClick={()=>dec(size)}>-</button>
-                <span className="mx-2">{luggage[size]||0}</span>
-                <button onClick={()=>inc(size)}>+</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <label>Upsell (only one)</label>
-        <div>
-          <label><input type="radio" checked={upsell==='none'} onChange={()=>setUpsell('none')}/> None</label>
-          <label className="ml-3"><input type="radio" checked={upsell==='airport'} onChange={()=>setUpsell('airport')}/> Airport pickup/drop (+RM60)</label>
-          <label className="ml-3"><input type="radio" checked={upsell==='door'} onChange={()=>setUpsell('door')}/> Door-to-door within 10km (+RM15)</label>
-        </div>
-      </div>
-
-      {upsell === 'airport' && (
-        <div className="mt-3">
-          <label>Airport</label>
-          <select value={airportChoice || ''} onChange={e=>setAirportChoice(e.target.value)}>
-            <option value=''>Select airport</option>
-            {availableAirports.map(a=> <option key={a} value={a}>{a}</option>)}
+        <div className="mb-3">
+          <label>City</label>
+          <select value={city} onChange={e=>setCity(e.target.value)}>
+            {Object.keys(window.BagBuddyConfig.cities_airports).map(c => <option key={c}>{c}</option>)}
           </select>
-          <div className="mt-2">Car automatically locked by luggage (inferred: {carSize})</div>
         </div>
-      )}
 
-      {upsell === 'door' && (
-        <div className="mt-3">
-          <label>Door service location (within 10km of pickup)</label>
-          <input placeholder="Hotel or address" />
-          <div className="mt-2">With passenger? <input type="checkbox" /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label>Pickup location</label>
+            <input value={pickupQuery} onChange={e=>{ setPickupQuery(e.target.value); nominatimSearch(e.target.value, setPickupSuggestions); }} placeholder="Start typing address or shop" />
+            <div className="suggestions">
+              {pickupSuggestions.map(s => <div key={s.place_id} onClick={()=>onSelectPickup(s)} style={{cursor:'pointer'}}>{s.display_name}</div>)}
+            </div>
+          </div>
+          <div>
+            <label>Drop-off location</label>
+            <input value={dropQuery} onChange={e=>{ setDropQuery(e.target.value); nominatimSearch(e.target.value, setDropSuggestions); }} placeholder="Start typing address or shop" />
+            <div className="suggestions">
+              {dropSuggestions.map(s => <div key={s.place_id} onClick={()=>onSelectDrop(s)} style={{cursor:'pointer'}}>{s.display_name}</div>)}
+            </div>
+          </div>
         </div>
-      )}
 
-      <div className="mt-4">
-        <strong>Total: RM {price.toFixed(2)}</strong>
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <div>
+            <label>Pickup date & time</label>
+            <input type="datetime-local" value={pickupDt} onChange={e=>setPickupDt(e.target.value)} />
+          </div>
+          <div>
+            <label>Drop-off date & time</label>
+            <input type="datetime-local" value={dropDt} onChange={e=>setDropDt(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label>Luggage</label>
+          <div className="grid grid-cols-4 gap-2">
+            {['small','regular','large','xl'].map(size => (
+              <div key={size} className="p-2 border">
+                <div className="text-sm">{size}</div>
+                <div className="mt-2">
+                  <button onClick={()=>dec(size)}>-</button>
+                  <span className="mx-2">{luggage[size]||0}</span>
+                  <button onClick={()=>inc(size)}>+</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label>Upsell (only one)</label>
+          <div>
+            <label><input type="radio" checked={upsell==='none'} onChange={()=>setUpsell('none')}/> None</label>
+            <label className="ml-3"><input type="radio" checked={upsell==='airport'} onChange={()=>setUpsell('airport')}/> Airport pickup/drop (+RM60)</label>
+            <label className="ml-3"><input type="radio" checked={upsell==='door'} onChange={()=>setUpsell('door')}/> Door-to-door within 10km (+RM15)</label>
+          </div>
+        </div>
+
+        {upsell === 'airport' && (
+          <div className="mt-3">
+            <label>Airport</label>
+            <select value={airportChoice || ''} onChange={e=>setAirportChoice(e.target.value)}>
+              <option value=''>Select airport</option>
+              {availableAirports.map(a=> <option key={a} value={a}>{a}</option>)}
+            </select>
+            <div className="mt-2">Car automatically locked by luggage (inferred: {carSize})</div>
+          </div>
+        )}
+
+        {upsell === 'door' && (
+          <div className="mt-3">
+            <label>Door service location (within 10km of pickup)</label>
+            <input placeholder="Hotel or address" />
+            <div className="mt-2">With passenger? <input type="checkbox" /></div>
+          </div>
+        )}
+
+        <div className="mt-4">
+          <strong>Total: RM {price.toFixed(2)}</strong>
+        </div>
+
+        <div className="mt-4">
+          <button onClick={onAddToCart}>Add to cart</button>
+          <button className="ml-3">Checkout</button>
+        </div>
+
+        <div className="mt-4 text-red-600">
+          {errors.map(e => <div key={e}>{e}</div>)}
+        </div>
       </div>
 
-      <div className="mt-4">
-        <button onClick={onAddToCart}>Add to cart</button>
-        <button className="ml-3">Checkout</button>
-      </div>
-
-      <div className="mt-4 text-red-600">
-        {errors.map(e => <div key={e}>{e}</div>)}
-      </div>
-    </div>
+      <CartButton />
+    </>
   );
 }
 
 document.addEventListener('DOMContentLoaded', function(){
   const root = document.getElementById('bagbuddy-service1');
   if(root){
-    createRoot(root).render(<Service1 />);
+    createRoot(root).render(<App />);
   }
 });
 
-export default Service1;
+export default App;

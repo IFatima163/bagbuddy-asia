@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
+import { useCart } from "./context/CartContext";
+import CartButton from "./components/CartButton";
 
 // Helpers
 const haversineKm = (lat1, lon1, lat2, lon2) => {
   const R = 6371;
   const toRad = v => v * Math.PI/180;
   const dLat = toRad(lat2-lat1);
-  const dLon = toRad(lon2-lon1);
+  const dLon = toRad(lat2-lon1);
   const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
   const c = 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   return R * c;
@@ -39,6 +41,8 @@ const PRICES = {
 };
 
 function Service2() {
+  const { addToCart } = useCart();   // ← CART DRIVER HOOK ADDED
+
   const [city, setCity] = useState('Kuala Lumpur');
   const [pickupQuery, setPickupQuery] = useState('');
   const [dropQuery, setDropQuery] = useState('');
@@ -49,7 +53,7 @@ function Service2() {
   const [luggage, setLuggage] = useState({ small:0, medium:0, large:0, xlarge:0 });
   const [passenger, setPassenger] = useState(false);
   const [carSize, setCarSize] = useState('none');
-  const [upsell, setUpsell] = useState('none'); // 'airport', 'door', 'none'
+  const [upsell, setUpsell] = useState('none');
   const [airportChoice, setAirportChoice] = useState(null);
   const [availableAirports, setAvailableAirports] = useState([]);
   const [price, setPrice] = useState(0);
@@ -126,8 +130,8 @@ function Service2() {
     saveFrequentSearch(item);
   };
 
-  const inc = (size) => setLuggage(l => ({...l, [size]: (l[size]||0) + 1}));
-  const dec = (size) => setLuggage(l => ({...l, [size]: Math.max(0, (l[size]||0) - 1)}));
+  const inc = size => setLuggage(l => ({...l, [size]: (l[size]||0) + 1}));
+  const dec = size => setLuggage(l => ({...l, [size]: Math.max(0, (l[size]||0) - 1)}));
 
   const clientValidate = () => {
     const errs = [];
@@ -139,7 +143,6 @@ function Service2() {
     const now = new Date();
     const p = new Date(pickupDt);
     const d = new Date(dropDt);
-    if(p.toString() === 'Invalid Date' || d.toString() === 'Invalid Date') errs.push('invalid_datetime');
     if(p < now) errs.push('pickup_in_past');
     if(d <= p) errs.push('drop_must_be_after_pickup');
 
@@ -147,6 +150,7 @@ function Service2() {
       const dist = haversineKm(pickupLatLng.lat,pickupLatLng.lng,dropLatLng.lat,dropLatLng.lng);
       if(dist > 10) errs.push('distance_exceeded');
     }
+
     setErrors(errs);
     return errs.length === 0;
   };
@@ -170,114 +174,136 @@ function Service2() {
     return res.json();
   };
 
+  // 🚨 REAL ADD TO CART LOGIC (replaces your old placeholder)
   const onAddToCart = async () => {
     if(!clientValidate()) return;
+
     const srv = await serverValidate();
     if(!srv.valid){
       setErrors([srv.reason || 'server_invalid']);
       return;
     }
-    alert('Validated. (Placeholder) Add to Cart logic to be implemented. Price total: RM ' + srv.price_total);
+
+    addToCart({
+      title: "Door-to-Door Service (Service 2)",
+      price: srv.price_total,
+      city,
+      pickup: pickupQuery,
+      drop: dropQuery,
+      pickup_datetime: pickupDt,
+      dropoff_datetime: dropDt,
+      luggage,
+      passenger,
+      inferred_car: carSize,
+      upsell,
+      airport: airportChoice,
+      distance_limit: "Max 10km"
+    });
   };
 
   return (
-    <div className="bagbuddy-ui p-4 max-w-3xl">
-      <h2>Door-to-Door Booking (Service 2)</h2>
+    <>
+      <div className="bagbuddy-ui p-4 max-w-3xl">
+        <h2>Door-to-Door Booking (Service 2)</h2>
 
-      <div className="mb-3">
-        <label>City</label>
-        <select value={city} onChange={e=>setCity(e.target.value)}>
-          {Object.keys(window.BagBuddyConfig.cities_airports).map(c => <option key={c}>{c}</option>)}
-        </select>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label>Pickup location</label>
-          <input value={pickupQuery} onChange={e=>{ setPickupQuery(e.target.value); nominatimSearch(e.target.value, setPickupSuggestions); }} placeholder="Start typing address or shop" />
-          <div className="suggestions">
-            {pickupSuggestions.map(s => <div key={s.place_id} onClick={()=>onSelectPickup(s)} style={{cursor:'pointer'}}>{s.display_name}</div>)}
-          </div>
-        </div>
-        <div>
-          <label>Drop-off location</label>
-          <input value={dropQuery} onChange={e=>{ setDropQuery(e.target.value); nominatimSearch(e.target.value, setDropSuggestions); }} placeholder="Start typing address or shop" />
-          <div className="suggestions">
-            {dropSuggestions.map(s => <div key={s.place_id} onClick={()=>onSelectDrop(s)} style={{cursor:'pointer'}}>{s.display_name}</div>)}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 mt-3">
-        <div>
-          <label>Pickup date & time</label>
-          <input type="datetime-local" value={pickupDt} onChange={e=>setPickupDt(e.target.value)} />
-        </div>
-        <div>
-          <label>Drop-off date & time</label>
-          <input type="datetime-local" value={dropDt} onChange={e=>setDropDt(e.target.value)} />
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <label>Luggage</label>
-        <div className="grid grid-cols-4 gap-2">
-          {['small','medium','large','xlarge'].map(size => (
-            <div key={size} className="p-2 border">
-              <div className="text-sm">{size}</div>
-              <div className="mt-2">
-                <button onClick={()=>dec(size)}>-</button>
-                <span className="mx-2">{luggage[size]||0}</span>
-                <button onClick={()=>inc(size)}>+</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <label>
-          <input type="checkbox" checked={passenger} onChange={e=>setPassenger(e.target.checked)} />
-          With Passenger
-        </label>
-        {passenger && <div>Car automatically inferred: {carSize}</div>}
-      </div>
-
-      <div className="mt-4">
-        <label>Upsell (only one)</label>
-        <div>
-          <label><input type="radio" checked={upsell==='none'} onChange={()=>setUpsell('none')}/> None</label>
-          <label className="ml-3"><input type="radio" checked={upsell==='airport'} onChange={()=>setUpsell('airport')}/> Airport pickup/drop (+RM60)</label>
-          <label className="ml-3"><input type="radio" checked={upsell==='door'} onChange={()=>setUpsell('door')}/> Door-to-door within 10km (+RM15)</label>
-        </div>
-      </div>
-
-      {upsell === 'airport' && (
-        <div className="mt-3">
-          <label>Airport</label>
-          <select value={airportChoice || ''} onChange={e=>setAirportChoice(e.target.value)}>
-            <option value=''>Select airport</option>
-            {availableAirports.map(a=> <option key={a} value={a}>{a}</option>)}
+        <div className="mb-3">
+          <label>City</label>
+          <select value={city} onChange={e=>setCity(e.target.value)}>
+            {Object.keys(window.BagBuddyConfig.cities_airports).map(c => <option key={c}>{c}</option>)}
           </select>
         </div>
-      )}
 
-      <div className="mt-4">
-        <strong>Total: RM {price.toFixed(2)}</strong>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label>Pickup location</label>
+            <input value={pickupQuery} onChange={e=>{ setPickupQuery(e.target.value); nominatimSearch(e.target.value, setPickupSuggestions); }} />
+            <div className="suggestions">
+              {pickupSuggestions.map(s => <div key={s.place_id} onClick={()=>onSelectPickup(s)}>{s.display_name}</div>)}
+            </div>
+          </div>
+
+          <div>
+            <label>Drop-off location</label>
+            <input value={dropQuery} onChange={e=>{ setDropQuery(e.target.value); nominatimSearch(e.target.value, setDropSuggestions); }} />
+            <div className="suggestions">
+              {dropSuggestions.map(s => <div key={s.place_id} onClick={()=>onSelectDrop(s)}>{s.display_name}</div>)}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <div>
+            <label>Pickup date & time</label>
+            <input type="datetime-local" value={pickupDt} onChange={e=>setPickupDt(e.target.value)} />
+          </div>
+          <div>
+            <label>Drop-off date & time</label>
+            <input type="datetime-local" value={dropDt} onChange={e=>setDropDt(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label>Luggage</label>
+          <div className="grid grid-cols-4 gap-2">
+            {['small','medium','large','xlarge'].map(size => (
+              <div key={size} className="p-2 border">
+                <div className="text-sm">{size}</div>
+                <div className="mt-2">
+                  <button onClick={()=>dec(size)}>-</button>
+                  <span className="mx-2">{luggage[size]||0}</span>
+                  <button onClick={()=>inc(size)}>+</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label>
+            <input type="checkbox" checked={passenger} onChange={e=>setPassenger(e.target.checked)} />
+            With Passenger
+          </label>
+          {passenger && <div>Car automatically inferred: {carSize}</div>}
+        </div>
+
+        <div className="mt-4">
+          <label>Upsell (only one)</label>
+          <div>
+            <label><input type="radio" checked={upsell==='none'} onChange={()=>setUpsell('none')} /> None</label>
+            <label className="ml-3"><input type="radio" checked={upsell==='airport'} onChange={()=>setUpsell('airport')} /> Airport pickup/drop (+RM60)</label>
+            <label className="ml-3"><input type="radio" checked={upsell==='door'} onChange={()=>setUpsell('door')} /> Door-to-door (+RM15)</label>
+          </div>
+        </div>
+
+        {upsell === 'airport' && (
+          <div className="mt-3">
+            <label>Airport</label>
+            <select value={airportChoice || ''} onChange={e=>setAirportChoice(e.target.value)}>
+              <option value=''>Select airport</option>
+              {availableAirports.map(a=> <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+        )}
+
+        <div className="mt-4">
+          <strong>Total: RM {price.toFixed(2)}</strong>
+        </div>
+
+        <div className="mt-4">
+          <button onClick={onAddToCart}>Add to cart</button>
+        </div>
+
+        <div className="mt-4 text-red-600">
+          {errors.map(e => <div key={e}>{e}</div>)}
+        </div>
       </div>
 
-      <div className="mt-4">
-        <button onClick={onAddToCart}>Add to cart</button>
-      </div>
-
-      <div className="mt-4 text-red-600">
-        {errors.map(e => <div key={e}>{e}</div>)}
-      </div>
-    </div>
+      <CartButton />
+    </>
   );
 }
 
-document.addEventListener('DOMContentLoaded', function(){
+document.addEventListener('DOMContentLoaded', function() {
   const root = document.getElementById('bagbuddy-service2');
   if(root){
     createRoot(root).render(<Service2 />);
