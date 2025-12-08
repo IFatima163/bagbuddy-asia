@@ -34,7 +34,6 @@ const inferCar = (counts) => {
 
 const PRICES = {
   self: { small:15, medium:20, large:25, xlarge:30 },
-  doorUpsell: 15,
   airportUpsell: 60
 };
 
@@ -73,15 +72,8 @@ function Service2() {
     total += (luggage.large||0) * PRICES.self.large;
     total += (luggage.xlarge||0) * PRICES.self.xlarge;
     if(upsell === 'airport') total += PRICES.airportUpsell;
-    if(upsell === 'door') total += PRICES.doorUpsell;
     setPrice(total);
-
-    if(passenger){
-      setCarSize(inferCar(luggage));
-    } else {
-      setCarSize('none');
-    }
-  }, [luggage, upsell, passenger]);
+  }, [luggage, upsell]);
 
   const nominatimSearch = async (q, setResults) => {
     if(!q || q.length < 2) { setResults([]); return; }
@@ -128,6 +120,7 @@ function Service2() {
   const inc = size => setLuggage(l => ({...l, [size]: (l[size]||0) + 1}));
   const dec = size => setLuggage(l => ({...l, [size]: Math.max(0, (l[size]||0) - 1)}));
 
+
   const clientValidate = () => {
     const errs = [];
     if(!pickupLatLng) errs.push('pickup_location_required');
@@ -169,47 +162,44 @@ function Service2() {
     return res.json();
   };
 
-  // -----------------------------
   // WooCommerce Add to Cart
-  // -----------------------------
   const onAddToCart = async () => {
-  if(!clientValidate()) return;
+    if(!clientValidate()) return;
 
-  const srv = await serverValidate();
-  if(!srv.valid){
-    setErrors([srv.reason || 'server_invalid']);
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append('product_id', BagBuddyConfig.products.service2);
-  formData.append('quantity', 1);
-  formData.append('price_override', srv.price_total);
-  formData.append('addons[city]', city);
-  formData.append('addons[pickup]', pickupQuery);
-  formData.append('addons[drop]', dropQuery);
-  formData.append('addons[pickup_datetime]', pickupDt);
-  formData.append('addons[dropoff_datetime]', dropDt);
-  formData.append('addons[luggage]', JSON.stringify(luggage));
-  formData.append('addons[passenger]', passenger ? 'yes' : 'no');
-  formData.append('addons[upsell]', upsell);
-  formData.append('addons[airport]', airportChoice || '');
-  formData.append('addons[calculated_price]', srv.price_total);
-
-  try{
-    const res = await fetch('/?wc-ajax=add_to_cart', { method: 'POST', body: formData });
-    const data = await res.json();
-    if(data.error){
-      alert("Failed to add to cart: " + data.error);
-    } else {
-      alert("Added Service 2 to cart!");
+    const srv = await serverValidate();
+    if(!srv.valid){
+      setErrors([srv.reason || 'server_invalid']);
+      return;
     }
-  } catch(e){
-    console.error(e);
-    alert("Error adding to cart");
-  }
-};
 
+    const formData = new FormData();
+    formData.append('product_id', BagBuddyConfig.products.service2);
+    formData.append('quantity', 1);
+    formData.append('price_override', srv.price_total);
+    formData.append('addons[city]', city);
+    formData.append('addons[pickup]', pickupQuery);
+    formData.append('addons[drop]', dropQuery);
+    formData.append('addons[pickup_datetime]', pickupDt);
+    formData.append('addons[dropoff_datetime]', dropDt);
+    formData.append('addons[luggage]', JSON.stringify(luggage));
+    formData.append('addons[passenger]', passenger ? 'yes' : 'no');
+    formData.append('addons[upsell]', upsell);
+    formData.append('addons[airport]', airportChoice || '');
+    formData.append('addons[calculated_price]', srv.price_total);
+
+    try{
+      const res = await fetch('/?wc-ajax=add_to_cart', { method: 'POST', body: formData });
+      const data = await res.json();
+      if(data.error){
+        alert("Failed to add to cart: " + data.error);
+      } else {
+        alert("Added Service 2 to cart!");
+      }
+    } catch(e){
+      console.error(e);
+      alert("Error adding to cart");
+    }
+  };
 
   return (
     <div className="bagbuddy-ui p-4 max-w-3xl">
@@ -272,7 +262,20 @@ function Service2() {
           <input type="checkbox" checked={passenger} onChange={e=>setPassenger(e.target.checked)} />
           With Passenger
         </label>
-        {passenger && <div>Car automatically inferred: {carSize}</div>}
+        {passenger && (
+          <div className="mt-3">
+            <label>Select car size</label>
+            <select value={carSize} onChange={e => setCarSize(e.target.value)}>
+              <option value="none">Select a car</option>
+              <option value="small">Small</option>
+              <option value="medium">Medium</option>
+              <option value="large">Large</option>
+            </select>
+            <div className="mt-1 text-gray-600 text-sm">
+              Suggested car based on luggage: {inferCar(luggage)}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-4">
@@ -280,7 +283,6 @@ function Service2() {
         <div>
           <label><input type="radio" checked={upsell==='none'} onChange={()=>setUpsell('none')} /> None</label>
           <label className="ml-3"><input type="radio" checked={upsell==='airport'} onChange={()=>setUpsell('airport')} /> Airport pickup/drop (+RM60)</label>
-          <label className="ml-3"><input type="radio" checked={upsell==='door'} onChange={()=>setUpsell('door')} /> Door-to-door (+RM15)</label>
         </div>
       </div>
 

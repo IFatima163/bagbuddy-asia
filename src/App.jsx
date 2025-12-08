@@ -51,20 +51,24 @@ function App() {
   const [airportChoice, setAirportChoice] = useState(null);
   const [availableAirports, setAvailableAirports] = useState([]);
   const [carSize, setCarSize] = useState('none');
+  const [manualCar, setManualCar] = useState(false);   // NEW
   const [price, setPrice] = useState(0);
   const [errors, setErrors] = useState([]);
   const [pickupSuggestions, setPickupSuggestions] = useState([]);
   const [dropSuggestions, setDropSuggestions] = useState([]);
 
+  // city airports
   useEffect(() => {
     if (window.BagBuddyConfig && window.BagBuddyConfig.cities_airports) {
-      setAvailableAirports(window.BagBuddyConfig.cities_airports[city] || []);
-      if ((window.BagBuddyConfig.cities_airports[city] || []).length === 1) {
-        setAirportChoice((window.BagBuddyConfig.cities_airports[city] || [])[0]);
+      const list = window.BagBuddyConfig.cities_airports[city] || [];
+      setAvailableAirports(list);
+      if (list.length === 1) {
+        setAirportChoice(list[0]);
       }
     }
   }, [city]);
 
+  // Updated inference / pricing useEffect
   useEffect(() => {
     let total = 0;
     total += (luggage.small || 0) * PRICES.self.small;
@@ -74,9 +78,13 @@ function App() {
     if (upsell === 'airport') total += PRICES.airportUpsell;
     if (upsell === 'door') total += PRICES.doorUpsell;
     setPrice(total);
+
     const inferred = inferCar(luggage);
-    setCarSize(inferred);
-  }, [luggage, upsell]);
+
+    if (!manualCar) {
+      setCarSize(inferred);
+    }
+  }, [luggage, upsell, manualCar]);
 
   const nominatimSearch = async (q, setResults) => {
     if (!q || q.length < 2) { setResults([]); return; }
@@ -94,6 +102,7 @@ function App() {
     setPickupSuggestions([]);
     saveFrequentSearch(item);
   };
+
   const onSelectDrop = (item) => {
     setDropQuery(item.display_name);
     setDropLatLng({ lat: parseFloat(item.lat), lng: parseFloat(item.lon) });
@@ -162,45 +171,63 @@ function App() {
   // WooCommerce Add to Cart Logic
   // ------------------------------
   const onAddToCart = async () => {
-  if (!clientValidate()) return;
+    if (!clientValidate()) return;
 
-  const srv = await serverValidate();
-  if (!srv.valid) {
-    setErrors([srv.reason || 'server_invalid']);
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append('product_id', BagBuddyConfig.products.service1);
-  formData.append('quantity', 1);
-  formData.append('price_override', srv.price_total);
-  formData.append('attributes', JSON.stringify({
-    city,
-    pickup: pickupQuery,
-    dropoff: dropQuery,
-    luggage,
-    upsell,
-    airport: airportChoice,
-    carSize
-  }));
-  formData.append('security', wc_add_to_cart_params.wc_ajax_nonce);
-
-  try {
-    const res = await fetch(wc_add_to_cart_params.wc_ajax_url.replace('%%endpoint%%', 'add_to_cart'), {
-      method: 'POST',
-      body: formData
-    });
-    const json = await res.json();
-    if (json.error) {
-      alert(json.error);
-    } else {
-      alert('Added to cart: RM ' + srv.price_total.toFixed(2));
+    const srv = await serverValidate();
+    if (!srv.valid) {
+      setErrors([srv.reason || 'server_invalid']);
+      return;
     }
-  } catch (e) {
-    alert('Error adding to cart');
-  }
-};
 
+    const productId =
+      (window.BagBuddyConfig &&
+        window.BagBuddyConfig.products &&
+        window.BagBuddyConfig.products.service1) ||
+      BagBuddyConfig.products?.service1 ||
+      null;
+
+    if (!productId) {
+      alert('Product configuration missing (product id).');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('product_id', productId);
+    formData.append('quantity', 1);
+    formData.append('price_override', srv.price_total);
+    formData.append('attributes', JSON.stringify({
+      city,
+      pickup: pickupQuery,
+      dropoff: dropQuery,
+      luggage,
+      upsell,
+      airport: airportChoice,
+      carSize
+    }));
+
+    formData.append('security',
+      (window.wc_add_to_cart_params && window.wc_add_to_cart_params.wc_ajax_nonce) || ''
+    );
+
+    try {
+      const url = (window.wc_add_to_cart_params &&
+        window.wc_add_to_cart_params.wc_ajax_url)
+        ? window.wc_add_to_cart_params.wc_ajax_url.replace('%%endpoint%%', 'add_to_cart')
+        : '/?wc-ajax=add_to_cart';
+
+      const res = await fetch(url, { method: 'POST', body: formData });
+      const json = await res.json();
+
+      if (json.error) {
+        alert(json.error);
+      } else {
+        alert('Added to cart: RM ' + srv.price_total.toFixed(2));
+        if (window.jQuery) window.jQuery(document).trigger('bagbuddy:added_to_cart');
+      }
+    } catch (e) {
+      alert('Error adding to cart');
+    }
+  };
 
   return (
     <div className="bagbuddy-ui p-4 max-w-3xl">
@@ -209,23 +236,56 @@ function App() {
       <div className="mb-3">
         <label>City</label>
         <select value={city} onChange={e => setCity(e.target.value)}>
-          {Object.keys(window.BagBuddyConfig.cities_airports).map(c => <option key={c}>{c}</option>)}
+          {Object.keys(window.BagBuddyConfig.cities_airports).map(c => (
+            <option key={c}>{c}</option>
+          ))}
         </select>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label>Pickup location</label>
-          <input value={pickupQuery} onChange={e => { setPickupQuery(e.target.value); nominatimSearch(e.target.value, setPickupSuggestions); }} placeholder="Start typing address or shop" />
+          <input
+            value={pickupQuery}
+            onChange={e => {
+              setPickupQuery(e.target.value);
+              nominatimSearch(e.target.value, setPickupSuggestions);
+            }}
+            placeholder="Start typing address or shop"
+          />
           <div className="suggestions">
-            {pickupSuggestions.map(s => <div key={s.place_id} onClick={() => onSelectPickup(s)} style={{ cursor: 'pointer' }}>{s.display_name}</div>)}
+            {pickupSuggestions.map(s => (
+              <div
+                key={s.place_id}
+                onClick={() => onSelectPickup(s)}
+                style={{ cursor: 'pointer' }}
+              >
+                {s.display_name}
+              </div>
+            ))}
           </div>
         </div>
+
         <div>
           <label>Drop-off location</label>
-          <input value={dropQuery} onChange={e => { setDropQuery(e.target.value); nominatimSearch(e.target.value, setDropSuggestions); }} placeholder="Start typing address or shop" />
+          <input
+            value={dropQuery}
+            onChange={e => {
+              setDropQuery(e.target.value);
+              nominatimSearch(e.target.value, setDropSuggestions);
+            }}
+            placeholder="Start typing address or shop"
+          />
           <div className="suggestions">
-            {dropSuggestions.map(s => <div key={s.place_id} onClick={() => onSelectDrop(s)} style={{ cursor: 'pointer' }}>{s.display_name}</div>)}
+            {dropSuggestions.map(s => (
+              <div
+                key={s.place_id}
+                onClick={() => onSelectDrop(s)}
+                style={{ cursor: 'pointer' }}
+              >
+                {s.display_name}
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -266,14 +326,41 @@ function App() {
         </div>
       </div>
 
+      {/* CAR SELECTION UI */}
+      {(upsell === 'airport' || upsell === 'door') && (
+        <div className="mt-3">
+          <label>Car size</label>
+          <select
+            value={manualCar ? carSize : 'auto'}
+            onChange={e => {
+              if (e.target.value === 'auto') {
+                setManualCar(false);
+                setCarSize(inferCar(luggage));
+              } else {
+                setManualCar(true);
+                setCarSize(e.target.value);
+              }
+            }}
+          >
+            <option value="auto">Auto (inferred: {inferCar(luggage)})</option>
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="large">Large</option>
+          </select>
+
+          <div className="mt-2">Inferred capacity: {inferCar(luggage)}</div>
+        </div>
+      )}
+
       {upsell === 'airport' && (
         <div className="mt-3">
           <label>Airport</label>
           <select value={airportChoice || ''} onChange={e => setAirportChoice(e.target.value)}>
             <option value=''>Select airport</option>
-            {availableAirports.map(a => <option key={a} value={a}>{a}</option>)}
+            {availableAirports.map(a => (
+              <option key={a} value={a}>{a}</option>
+            ))}
           </select>
-          <div className="mt-2">Car automatically locked by luggage (inferred: {carSize})</div>
         </div>
       )}
 
@@ -281,7 +368,6 @@ function App() {
         <div className="mt-3">
           <label>Door service location (within 10km of pickup)</label>
           <input placeholder="Hotel or address" />
-          <div className="mt-2">With passenger? <input type="checkbox" /></div>
         </div>
       )}
 

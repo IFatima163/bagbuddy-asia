@@ -33,9 +33,7 @@ const inferCar = (counts) => {
 };
 
 const PRICES = {
-  self: { small:15, medium:20, large:25, xlarge:30 },
-  doorUpsell: 15,
-  airportUpsell: 60
+  self: { small:15, medium:20, large:25, xlarge:30 }
 };
 
 // Nominatim search
@@ -54,7 +52,7 @@ const saveFrequentSearch = async (city, item) => {
   try{
     await fetch(`${window.BagBuddyConfig.root}/save_search`, {
       method: 'POST',
-      headers: { 'Content-Type':'application/json', 'X-WP-Nonce': window.BagBuddyConfig.nonce },
+      headers: { 'Content-Type':'application/json','X-WP-Nonce': window.BagBuddyConfig.nonce },
       body: JSON.stringify({
         city,
         place_name: item.display_name,
@@ -74,24 +72,11 @@ function Service3() {
   const [pickupDt, setPickupDt] = useState('');
   const [dropDt, setDropDt] = useState('');
   const [luggage, setLuggage] = useState({ small:0, medium:0, large:0, xlarge:0 });
-  const [upsell, setUpsell] = useState('none');
-  const [airportChoice, setAirportChoice] = useState(null);
-  const [availableAirports, setAvailableAirports] = useState([]);
   const [carSize, setCarSize] = useState('none');
   const [price, setPrice] = useState(0);
   const [errors, setErrors] = useState([]);
   const [pickupSuggestions, setPickupSuggestions] = useState([]);
   const [dropSuggestions, setDropSuggestions] = useState([]);
-
-  // set airports
-  useEffect(()=> {
-    if(window.BagBuddyConfig && window.BagBuddyConfig.cities_airports){
-      setAvailableAirports(window.BagBuddyConfig.cities_airports[city] || []);
-      if((window.BagBuddyConfig.cities_airports[city] || []).length === 1){
-        setAirportChoice((window.BagBuddyConfig.cities_airports[city] || [])[0]);
-      }
-    }
-  }, [city]);
 
   // price + car inference
   useEffect(()=> {
@@ -101,12 +86,9 @@ function Service3() {
     total += (luggage.large||0) * PRICES.self.large;
     total += (luggage.xlarge||0) * PRICES.self.xlarge;
 
-    if(upsell === 'airport') total += PRICES.airportUpsell;
-    if(upsell === 'door') total += PRICES.doorUpsell;
-
     setPrice(total);
     setCarSize(inferCar(luggage));
-  }, [luggage, upsell]);
+  }, [luggage]);
 
   const inc = size => setLuggage(l => ({...l, [size]: (l[size]||0) + 1}));
   const dec = size => setLuggage(l => ({...l, [size]: Math.max(0,(l[size]||0)-1)}));
@@ -151,53 +133,48 @@ function Service3() {
 
   // WooCommerce add to cart
   const onAddToCart = async () => {
-  if(!clientValidate()) return;
+    if(!clientValidate()) return;
 
-  const payload = {
-    pickup_lat: pickupLatLng.lat,
-    pickup_lng: pickupLatLng.lng,
-    drop_lat: dropLatLng.lat,
-    drop_lng: dropLatLng.lng,
-    pickup_datetime: pickupDt,
-    dropoff_datetime: dropDt,
-    luggage,
-    upsell
+    const payload = {
+      pickup_lat: pickupLatLng.lat,
+      pickup_lng: pickupLatLng.lng,
+      drop_lat: dropLatLng.lat,
+      drop_lng: dropLatLng.lng,
+      pickup_datetime: pickupDt,
+      dropoff_datetime: dropDt,
+      luggage
+    };
+
+    const res = await fetch(`${window.BagBuddyConfig.root}/validate_booking`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-WP-Nonce':window.BagBuddyConfig.nonce},
+      body: JSON.stringify(payload)
+    });
+
+    const srv = await res.json();
+    if(!srv.valid){
+      setErrors([srv.reason || 'server_invalid']);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('product_id', BagBuddyConfig.products.service3);
+    formData.append('quantity', 1);
+    formData.append('price_override', srv.price_total);
+    formData.append('addons[city]', city);
+    formData.append('addons[pickup]', pickupQuery);
+    formData.append('addons[drop]', dropQuery);
+    formData.append('addons[pickup_datetime]', pickupDt);
+    formData.append('addons[dropoff_datetime]', dropDt);
+    formData.append('addons[luggage]', JSON.stringify(luggage));
+
+    try{
+      const response = await fetch('/?wc-ajax=add_to_cart',{method:'POST',body:formData});
+      const data = await response.json();
+      if(data.error) alert("Failed to add to cart: "+data.error);
+      else alert("Service 3 added to cart!");
+    } catch(e){ console.error(e); alert("Error adding to cart"); }
   };
-
-  const res = await fetch(`${window.BagBuddyConfig.root}/validate_booking`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json','X-WP-Nonce':window.BagBuddyConfig.nonce},
-    body: JSON.stringify(payload)
-  });
-
-  const srv = await res.json();
-  if(!srv.valid){
-    setErrors([srv.reason || 'server_invalid']);
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append('product_id', BagBuddyConfig.products.service3);
-  formData.append('quantity', 1);
-  formData.append('price_override', srv.price_total);
-  formData.append('addons[city]', city);
-  formData.append('addons[pickup]', pickupQuery);
-  formData.append('addons[drop]', dropQuery);
-  formData.append('addons[pickup_datetime]', pickupDt);
-  formData.append('addons[dropoff_datetime]', dropDt);
-  formData.append('addons[luggage]', JSON.stringify(luggage));
-  formData.append('addons[upsell]', upsell);
-  formData.append('addons[airport]', airportChoice||'');
-  formData.append('addons[calculated_price]', srv.price_total);
-
-  try{
-    const response = await fetch('/?wc-ajax=add_to_cart',{method:'POST',body:formData});
-    const data = await response.json();
-    if(data.error) alert("Failed to add to cart: "+data.error);
-    else alert("Service 3 added to cart!");
-  } catch(e){ console.error(e); alert("Error adding to cart"); }
-};
-
 
   return (
     <div className="bagbuddy-ui p-4 max-w-3xl">
@@ -257,25 +234,10 @@ function Service3() {
       </div>
 
       <div>
-        <label>Upsell</label>
-        <div>
-          <label><input type="radio" checked={upsell==='none'} onChange={()=>setUpsell('none')} /> None</label>
-          <label><input type="radio" checked={upsell==='airport'} onChange={()=>setUpsell('airport')} /> Airport (+RM60)</label>
-          <label><input type="radio" checked={upsell==='door'} onChange={()=>setUpsell('door')} /> Door service (+RM15)</label>
-        </div>
+        <h3>Car (auto-selected based on luggage)</h3>
+        <div>{carSize}</div>
       </div>
 
-      {upsell==='airport' && (
-        <div>
-          <label>Airport</label>
-          <select value={airportChoice||''} onChange={e=>setAirportChoice(e.target.value)}>
-            <option value=''>Select airport</option>
-            {availableAirports.map(a=><option key={a} value={a}>{a}</option>)}
-          </select>
-        </div>
-      )}
-
-      <div>Car inferred by luggage: {carSize}</div>
       <div>Total: RM {price.toFixed(2)}</div>
 
       <div>

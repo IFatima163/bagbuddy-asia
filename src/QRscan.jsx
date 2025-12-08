@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
 
-function ScanForm() {
+function QRscan() {
   const [dateScanned, setDateScanned] = useState("");
   const [timeScanned, setTimeScanned] = useState("");
   const [form, setForm] = useState({
@@ -76,11 +77,10 @@ function ScanForm() {
   );
 }
 
-document.addEventListener('DOMContentLoaded', function () {
-  const root = document.getElementById('bagbuddy-scan');
-  if (root) {
-    createRoot(root).render(<QRscan />);
-  }
-});
+const root = document.getElementById("bagbuddy-scan");
+if (root) {
+  createRoot(root).render(<QRscan />);
+}
+
 
 export default QRscan;
